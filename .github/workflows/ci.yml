@@ -1,0 +1,29 @@
+name: Zephyr MicroPython CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  twister-sim-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Zephyr Environment
+        uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: app
+          toolchains: host-zephyr-elf
+
+      - name: Run Twister Tests on Native Simulator
+        run: |
+          west twister -T app/ --platform native_sim -v

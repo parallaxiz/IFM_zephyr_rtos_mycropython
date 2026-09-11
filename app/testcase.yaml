@@ -1,0 +1,13 @@
+tests:
+  micropython.zephyr.boot_test:
+    tags:
+      - micropython
+      - zephyr
+      - native_sim
+    platform_allow:
+      - native_sim
+    harness: console
+    harness_config:
+      type: one_line
+      regex:
+        - "MicroPython initialized successfully"

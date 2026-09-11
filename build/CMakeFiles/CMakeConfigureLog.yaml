@@ -1,0 +1,85 @@
+
+---
+events:
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-3.31/Modules/CMakeDetermineSystem.cmake:200 (message)"
+      - "/home/ved/zephyr-workspace/zephyr/cmake/modules/kernel.cmake:172 (project)"
+      - "/home/ved/zephyr-workspace/zephyr/cmake/modules/zephyr_default.cmake:133 (include)"
+      - "/home/ved/zephyr-workspace/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:57 (include)"
+      - "/home/ved/zephyr-workspace/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:83 (include_boilerplate)"
+      - "CMakeLists.txt:2 (find_package)"
+    message: |
+      The target system is: Generic - 4.4.99 - posix
+      The host system is: Linux - 6.6.87.2-microsoft-standard-WSL2 - x86_64
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-3.31/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "/usr/share/cmake-3.31/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/usr/share/cmake-3.31/Modules/CMakeDetermineCCompiler.cmake:123 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "/home/ved/zephyr-workspace/zephyr/cmake/modules/kernel.cmake:172 (project)"
+      - "/home/ved/zephyr-workspace/zephyr/cmake/modules/zephyr_default.cmake:133 (include)"
+      - "/home/ved/zephyr-workspace/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:57 (include)"
+      - "/home/ved/zephyr-workspace/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:83 (include_boilerplate)"
+      - "CMakeLists.txt:2 (find_package)"
+    message: |
+      Compiling the C compiler identification source file "CMakeCCompilerId.c" succeeded.
+      Compiler: /usr/bin/gcc 
+      Build flags: 
+      Id flags:  
+      
+      The output was:
+      0
+      
+      
+      Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "a.out"
+      
+      The C compiler identification is GNU, found in:
+        /home/ved/zephyr-workspace/my-zephyr-micropython/build/CMakeFiles/3.31.6/CompilerIdC/a.out
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-3.31/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "/usr/share/cmake-3.31/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/usr/share/cmake-3.31/Modules/CMakeDetermineCXXCompiler.cmake:126 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "/home/ved/zephyr-workspace/zephyr/cmake/modules/kernel.cmake:172 (project)"
+      - "/home/ved/zephyr-workspace/zephyr/cmake/modules/zephyr_default.cmake:133 (include)"
+      - "/home/ved/zephyr-workspace/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:57 (include)"
+      - "/home/ved/zephyr-workspace/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:83 (include_boilerplate)"
+      - "CMakeLists.txt:2 (find_package)"
+    message: |
+      Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" succeeded.
+      Compiler: /usr/bin/gcc 
+      Build flags: 
+      Id flags:  
+      
+      The output was:
+      0
+      
+      
+      Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "a.out"
+      
+      The CXX compiler identification is GNU, found in:
+        /home/ved/zephyr-workspace/my-zephyr-micropython/build/CMakeFiles/3.31.6/CompilerIdCXX/a.out
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-3.31/Modules/CMakeDetermineCompilerId.cmake:1237 (message)"
+      - "/usr/share/cmake-3.31/Modules/CMakeDetermineASMCompiler.cmake:135 (CMAKE_DETERMINE_COMPILER_ID_VENDOR)"
+      - "/home/ved/zephyr-workspace/zephyr/cmake/modules/kernel.cmake:178 (enable_language)"
+      - "/home/ved/zephyr-workspace/zephyr/cmake/modules/zephyr_default.cmake:133 (include)"
+      - "/home/ved/zephyr-workspace/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:57 (include)"
+      - "/home/ved/zephyr-workspace/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:83 (include_boilerplate)"
+      - "CMakeLists.txt:2 (find_package)"
+    message: |
+      Checking whether the ASM compiler is GNU using "--version" matched "(GNU assembler)|(GCC)|(Free Software Foundation)":
+      gcc (Debian 14.2.0-19) 14.2.0
+      Copyright (C) 2024 Free Software Foundation, Inc.
+      This is free software; see the source for copying conditions.  There is NO
+      warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+      
+...

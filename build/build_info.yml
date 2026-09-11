@@ -1,0 +1,59 @@
+cmake:
+  application:
+    configuration-dir: '/home/ved/zephyr-workspace/my-zephyr-micropython/app'
+    source-dir: '/home/ved/zephyr-workspace/my-zephyr-micropython/app'
+  board:
+    name: 'native_sim'
+    path:
+     - '/home/ved/zephyr-workspace/zephyr/boards/native/native_sim'
+    qualifiers: 'native'
+    revision: ''
+  devicetree:
+    bindings-dirs:
+     - '/home/ved/zephyr-workspace/zephyr/dts/bindings'
+    files:
+     - '/home/ved/zephyr-workspace/zephyr/boards/native/native_sim/native_sim.dts'
+    include-dirs:
+     - '/home/ved/zephyr-workspace/modules/hal/ambiq/dts'
+     - '/home/ved/zephyr-workspace/modules/hal/atmel/include'
+     - '/home/ved/zephyr-workspace/modules/hal/bouffalolab/include'
+     - '/home/ved/zephyr-workspace/modules/hal/bouffalolab/include/zephyr'
+     - '/home/ved/zephyr-workspace/modules/hal/gigadevice/include'
+     - '/home/ved/zephyr-workspace/modules/hal/infineon/dts'
+     - '/home/ved/zephyr-workspace/modules/hal/microchip/include'
+     - '/home/ved/zephyr-workspace/modules/hal/microchip/dts'
+     - '/home/ved/zephyr-workspace/modules/hal/nuvoton/dts'
+     - '/home/ved/zephyr-workspace/modules/hal/nxp/dts'
+     - '/home/ved/zephyr-workspace/modules/hal/stm32/dts'
+     - '/home/ved/zephyr-workspace/modules/hal/ti/dts'
+     - '/home/ved/zephyr-workspace/zephyr/include'
+     - '/home/ved/zephyr-workspace/zephyr/include/zephyr'
+     - '/home/ved/zephyr-workspace/zephyr/dts/common'
+     - '/home/ved/zephyr-workspace/zephyr/dts/vendor'
+     - '/home/ved/zephyr-workspace/zephyr/dts/rx'
+     - '/home/ved/zephyr-workspace/zephyr/dts/x86'
+     - '/home/ved/zephyr-workspace/zephyr/dts/xtensa'
+     - '/home/ved/zephyr-workspace/zephyr/dts/sparc'
+     - '/home/ved/zephyr-workspace/zephyr/dts/riscv'
+     - '/home/ved/zephyr-workspace/zephyr/dts/posix'
+     - '/home/ved/zephyr-workspace/zephyr/dts/arm64'
+     - '/home/ved/zephyr-workspace/zephyr/dts/arm'
+     - '/home/ved/zephyr-workspace/zephyr/dts/arc'
+     - '/home/ved/zephyr-workspace/zephyr/dts'
+  kconfig:
+    files:
+     - '/home/ved/zephyr-workspace/zephyr/boards/native/native_sim/native_sim_defconfig'
+     - '/home/ved/zephyr-workspace/my-zephyr-micropython/app/prj.conf'
+    user-files:
+     - '/home/ved/zephyr-workspace/my-zephyr-micropython/app/prj.conf'
+  toolchain:
+    name: 'host'
+    path: ''
+  zephyr:
+    version: '4.4.99'
+    zephyr-base: '/home/ved/zephyr-workspace/zephyr'
+version: '0.1.0'
+west:
+  command: '/home/ved/zephyrpython-env/bin/west build -b native_sim app'
+  topdir: '/home/ved/zephyr-workspace'
+  version: '1.5.0'
