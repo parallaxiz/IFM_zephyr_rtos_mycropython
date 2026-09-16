@@ -4,6 +4,7 @@
 #include <zephyr/drivers/display.h>
 #endif
 #include <string.h>
+#include "micropython_runner.h"
 
 /* MicroPython core headers */
 #include "py/compile.h"
@@ -83,6 +84,9 @@ void mp_runtime_cleanup(void)
 
 int main(void)
 {
+    /* Run MicroPython runner test suite */
+    mp_runner_test_stub();
+
     const struct device *display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
 
     if (!device_is_ready(display_dev)) {
