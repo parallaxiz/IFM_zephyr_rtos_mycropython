@@ -13,6 +13,7 @@ target_include_directories(app PRIVATE
 # Compile core VM runtime, GC heap, and required objects for Task 2.2
 target_sources(app PRIVATE
     src/main.c
+    src/mp_port/mphalport.c
     ${MP_DIR}/py/mpstate.c
     ${MP_DIR}/py/malloc.c
     ${MP_DIR}/py/gc.c
