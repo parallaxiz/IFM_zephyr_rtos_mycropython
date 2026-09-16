@@ -44,20 +44,7 @@ void fill_rect(const struct device *display_dev,
     display_write(display_dev, x, y, &desc, buf);
 }
 
-/* MicroPython runtime hooks */
-void nlr_jump_fail(void *val)
-{
-    printk("[MICROPY_ERR] Fatal NLR jump failed: %p\n", val);
-    while (1) {
-        k_sleep(K_FOREVER);
-    }
-}
-
-void gc_collect(void)
-{
-    gc_collect_start();
-    gc_collect_end();
-}
+/* MicroPython runtime hooks provided by micropython_runner.c */
 
 /* Task 2.2: VM Runtime Setup */
 void mp_runtime_setup(void)
