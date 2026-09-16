@@ -43,34 +43,6 @@ set(MICROPY_SOURCE_QSTR
 target_sources(app PRIVATE
     src/main.c
     src/micropython_runner.c
+    src/mp_port/mphalport.c
     ${MICROPY_SOURCE_QSTR}
 )
-
-target_include_directories(app PRIVATE
-    src
-    src/mp_port
-    ${MICROPY_PORT_DIR}
-    ${MICROPY_DIR}
-    ${MICROPY_INC_CORE}
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_BINARY_DIR}/genhdr
-    ${CMAKE_CURRENT_BINARY_DIR}/zephyr/include/generated
-    ${CMAKE_CURRENT_BINARY_DIR}/zephyr/include/generated/zephyr
-)
-
-target_compile_definitions(app PRIVATE
-    NDEBUG
-    MICROPY_HEAP_SIZE=16384
-    FFCONF_H="${MICROPY_OOFATFS_DIR}/ffconf.h"
-    asm=__asm__
-)
-
-zephyr_get_include_directories_for_lang(C includes)
-zephyr_get_system_include_directories_for_lang(C system_includes)
-zephyr_get_compile_definitions_for_lang(C definitions)
-zephyr_get_compile_options_for_lang(C options)
-
-set(MICROPY_CPP_FLAGS_EXTRA ${includes} ${system_includes} ${definitions} ${options} -I${CMAKE_CURRENT_BINARY_DIR}/zephyr/include/generated/zephyr -I${CMAKE_CURRENT_BINARY_DIR}/zephyr/include/generated -DFFCONF_H="${MICROPY_OOFATFS_DIR}/ffconf.h" -Dasm=__asm__)
-
-include(${MICROPY_DIR}/py/mkrules.cmake)
-
