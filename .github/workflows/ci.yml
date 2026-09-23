@@ -7,23 +7,49 @@ on:
     branches: [ main ]
 
 jobs:
-  twister-sim-test:
+  build:
+    name: Build Apps
     runs-on: ubuntu-latest
+    env:
+      ZEPHYR_TOOLCHAIN_VARIANT: host
+      ZEPHYR_BASE: /home/runner/zephyrproject/zephyr
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Setup Zephyr Environment
-        uses: zephyrproject-rtos/action-zephyr-setup@v1
-        with:
-          app-path: app
-          toolchains: host-zephyr-elf
-
-      - name: Run Twister Tests on Native Simulator
+      - name: Install System Dependencies
         run: |
-          west twister -T app/ --platform native_sim -v
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            gcc-multilib \
+            g++-multilib \
+            ninja-build \
+            cmake \
+            git \
+            libsdl2-dev
+
+      - name: Initialize Zephyr Workspace
+        run: |
+          pip install --upgrade pip
+          pip install west
+          west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.4.0 /home/runner/zephyrproject
+          cd /home/runner/zephyrproject
+          west update --narrow -o=--depth=1
+          west zephyr-export
+          pip install -r /home/runner/zephyrproject/zephyr/scripts/requirements.txt
+
+      - name: Build app_sim on Native Simulator
+        run: |
+          west build -p always -b native_sim app_sim
+
+      - name: Build app_hardware on Native Simulator
+        run: |
+          west build -p always -b native_sim app_hardware

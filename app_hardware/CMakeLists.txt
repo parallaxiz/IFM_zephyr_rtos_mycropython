@@ -81,4 +81,3 @@ set(MICROPY_CPP_FLAGS_EXTRA -I${COMMON_DIR}/mp_port -I${COMMON_DIR} -I${CMAKE_CU
 
 include(${MICROPY_DIR}/py/mkrules.cmake)
 
-generate_inc_file_for_target(app ${CMAKE_CURRENT_SOURCE_DIR}/src/main.py ${CMAKE_CURRENT_BINARY_DIR}/main_py.inc)
