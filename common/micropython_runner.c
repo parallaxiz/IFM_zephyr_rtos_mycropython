@@ -16,19 +16,40 @@
 #include "py/parse.h"
 #include "py/nlr.h"
 #include "py/obj.h"
+#include "py/mphal.h"
 #include "shared/runtime/gchelper.h"
 
-static char mp_heap[16384];
+#ifndef MICROPY_HEAP_SIZE
+#define MICROPY_HEAP_SIZE (48 * 1024)
+#endif
+
+static char mp_heap[MICROPY_HEAP_SIZE];
 static bool mp_is_initialized = false;
 
 void mp_runner_init(void) {
     if (!mp_is_initialized) {
         volatile int stack_dummy = 0;
+        mp_stack_ctrl_init();
         mp_stack_set_top((void *)&stack_dummy);
         mp_stack_set_limit(4096 - 512);
+
         gc_init(mp_heap, mp_heap + sizeof(mp_heap));
+        printk("[VM_INIT] Allocated %d KB GC Heap [%p - %p]\n",
+               (int)(sizeof(mp_heap) / 1024),
+               (void *)mp_heap, (void *)(mp_heap + sizeof(mp_heap)));
+
         mp_init();
+        mp_hal_init();
         mp_is_initialized = true;
+        printk("MicroPython initialized successfully\n");
+    }
+}
+
+void mp_runner_deinit(void) {
+    if (mp_is_initialized) {
+        mp_deinit();
+        mp_is_initialized = false;
+        printk("[VM_INIT] MicroPython runtime deinitialized.\n");
     }
 }
 

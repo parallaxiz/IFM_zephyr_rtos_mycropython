@@ -6,6 +6,16 @@ extern "C" {
 #endif
 
 /**
+ * @brief Initializes the MicroPython VM runtime, stack limit, and GC heap.
+ */
+void mp_runner_init(void);
+
+/**
+ * @brief Deinitializes the MicroPython VM runtime.
+ */
+void mp_runner_deinit(void);
+
+/**
  * @brief Executes a Python script from an in-memory C string.
  *
  * This function creates a MicroPython lexer from the source string, parses,
@@ -30,3 +40,4 @@ void mp_runner_test_stub(void);
 #endif
 
 #endif /* MICROPYTHON_RUNNER_H */
+

@@ -1,3 +1,3 @@
 [submodule "app/src/micropython"]
-	path = app/src/micropython
+	path = common/micropython
 	url = https://github.com/micropython/micropython.git

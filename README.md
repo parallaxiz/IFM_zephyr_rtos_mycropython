@@ -125,9 +125,4 @@ sudo apt update && sudo apt install -y gcc-multilib g++-multilib
 Issue 5: source: command not found / CMD.EXE was started with the above path...
 Cause: Terminal opened inside Windows Command Prompt (cmd.exe) instead of Linux/WSL terminal.
 
-Solution: Run wsl in Command Prompt to switch to Linux, or change the default terminal shell in VS Code to bash.
-
-
-<Elicitations message="Would you like to move on to embedding MicroPython?">
-  <Elicitation label="Begin Step 1 (MicroPython Core)" query="The README is saved! How do we begin Step 1 to embed MicroPython?"/>
-</Elicitations>
+Solution: Run wsl in Command Prompt to switch to Linux, or change the default terminal shell in VS Code to bash.

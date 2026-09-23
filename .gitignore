@@ -1,5 +1,6 @@
 # Zephyr build output
 build/
+twister-out/
 
 # Python virtual environment
 *.pyc
