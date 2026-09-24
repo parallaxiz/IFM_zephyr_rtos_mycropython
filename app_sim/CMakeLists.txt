@@ -16,6 +16,7 @@ set(MICROPY_SOURCE_PORT
     ${MICROPY_PORT_DIR}/machine_pin.c
     ${MICROPY_PORT_DIR}/machine_i2c.c
     ${MICROPY_PORT_DIR}/machine_spi.c
+    ${MICROPY_PORT_DIR}/machine_timer.c
     ${MICROPY_PORT_DIR}/mphalport.c
     ${MICROPY_PORT_DIR}/zephyr_device.c
     ${MICROPY_PORT_DIR}/zephyr_storage.c
@@ -23,6 +24,7 @@ set(MICROPY_SOURCE_PORT
 )
 
 set(MICROPY_SOURCE_SHARED
+    ${MICROPY_DIR}/drivers/bus/softspi.c
     ${MICROPY_DIR}/shared/libc/printf.c
     ${MICROPY_DIR}/shared/readline/readline.c
     ${MICROPY_DIR}/shared/runtime/gchelper_generic.c
@@ -30,6 +32,7 @@ set(MICROPY_SOURCE_SHARED
     ${MICROPY_DIR}/shared/runtime/mpirq.c
     ${MICROPY_DIR}/shared/runtime/pyexec.c
     ${MICROPY_DIR}/shared/runtime/stdout_helpers.c
+    ${MICROPY_DIR}/shared/runtime/sys_stdio_mphal.c
     ${MICROPY_DIR}/shared/timeutils/timeutils.c
 )
 

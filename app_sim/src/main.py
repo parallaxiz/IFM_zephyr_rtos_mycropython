@@ -1,14 +1,17 @@
-import simulator
+import time
+from machine import Pin
 
-print("[PYTHON MAIN] Starting Python-controlled LED simulation from main.py...")
+# LED pin on nRF5340 DK (typically pin 13 or designated user LED GPIO)
+led = Pin(13, Pin.OUT)
 
+print("[HARDWARE] Starting LED blink...")
 for cycle in range(1, 5):
-    print("[PYTHON MAIN] Blink cycle %d/4: Turning LED ON" % cycle)
-    simulator.set_led(True)
-    simulator.sleep_ms(1000)
+    print(f"[HARDWARE] Cycle {cycle}/4: ON")
+    led.on()
+    time.sleep_ms(1000)
 
-    print("[PYTHON MAIN] Blink cycle %d/4: Turning LED OFF" % cycle)
-    simulator.set_led(False)
-    simulator.sleep_ms(1000)
+    print(f"[HARDWARE] Cycle {cycle}/4: OFF")
+    led.off()
+    time.sleep_ms(1000)
 
-print("[PYTHON MAIN] Simulation completed successfully!")
+print("[HARDWARE] Done!")
