@@ -4,10 +4,46 @@ tests:
       - micropython
       - zephyr
       - native_sim
+      - smoke
     platform_allow:
       - native_sim
     harness: console
     harness_config:
-      type: one_line
+      type: multi_line
       regex:
+        - "Booting Zephyr OS"
+        - "MicroPython initialized successfully"
+
+  micropython.zephyr.runner_test:
+    tags:
+      - micropython
+      - execution
+      - regression
+      - native_sim
+    platform_allow:
+      - native_sim
+    harness: console
+    harness_config:
+      type: multi_line
+      regex:
+        - "MicroPython initialized successfully"
+        - "Test: MicroPython string runner working!"
+        - "10 \\+ 20 = 30"
+        - "ZeroDivisionError"
+        - "Expected failure caught safely"
+
+  micropython.zephyr.hardware_compat:
+    tags:
+      - micropython
+      - hardware
+      - nrf5340
+    platform_allow:
+      - native_sim
+      - nrf5340dk/nrf5340/cpuapp
+    harness: console
+    harness_config:
+      type: multi_line
+      regex:
+        - "Hardware HAL Self-Test"
+        - "Direct UART string transmission verified"
         - "MicroPython initialized successfully"

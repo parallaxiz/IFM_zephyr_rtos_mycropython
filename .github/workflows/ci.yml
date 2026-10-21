@@ -2,13 +2,13 @@ name: Zephyr MicroPython CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, 'feature/**' ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 jobs:
   build:
-    name: Build Apps
+    name: Build & Validate Apps
     runs-on: ubuntu-latest
     env:
       ZEPHYR_TOOLCHAIN_VARIANT: host
@@ -46,10 +46,15 @@ jobs:
           west zephyr-export
           pip install -r /home/runner/zephyrproject/zephyr/scripts/requirements.txt
 
+      - name: Build and Validate Boilerplate app (README Specification)
+        run: |
+          west build -p always -b native_sim app
+          ./build/zephyr/zephyr.exe | grep "MicroPython initialized successfully"
+
       - name: Build app_sim on Native Simulator
         run: |
           west build -p always -b native_sim app_sim
 
       - name: Build app_hardware on Native Simulator
         run: |
-          west build -p always -b native_sim app_hardware
+          west build -p always -b native_sim app_hardware
