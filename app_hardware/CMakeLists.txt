@@ -48,6 +48,7 @@ set(MICROPY_SOURCE_QSTR
 
 target_sources(app PRIVATE
     ${MICROPY_SOURCE_QSTR}
+    ${COMMON_DIR}/hw_hal.c
 )
 
 target_include_directories(app PRIVATE

@@ -17,6 +17,71 @@
 #include "py/obj.h"
 #include "py/mphal.h"
 #include "micropython_runner.h"
+#include "hw_hal.h"
+
+/* Simple self-test demonstrating all 4 HAL abstractions on physical target */
+static volatile uint32_t s_timer_ticks = 0;
+static void test_timer_callback(void *user_data)
+{
+    hal_gpio_pin_t *led = (hal_gpio_pin_t *)user_data;
+    if (led != NULL) {
+        hal_gpio_toggle(led);
+    }
+    s_timer_ticks++;
+}
+
+static void run_hal_self_test(void)
+{
+    HAL_LOG_INFO("TEST", "========================================");
+    HAL_LOG_INFO("TEST", "Starting Hardware HAL Self-Test on nRF Board");
+    HAL_LOG_INFO("TEST", "========================================");
+
+    /* 1. Logging verification */
+    HAL_LOG_DEBUG("TEST", "Testing DEBUG level message");
+    HAL_LOG_INFO("TEST",  "Testing INFO level message with uptime: %llu ms", hal_uptime_ms());
+    HAL_LOG_WARN("TEST",  "Testing WARN level message");
+    HAL_LOG_ERROR("TEST", "Testing ERROR level message");
+
+    /* 2. UART Abstraction */
+    const struct device *uart = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+    if (hal_uart_init(uart) == 0) {
+        hal_uart_send_str(uart, "[HAL_UART] Direct UART string transmission verified!\r\n");
+    }
+
+    /* 3. GPIO Abstraction (using board's led0 alias) */
+#if DT_NODE_HAS_STATUS(DT_ALIAS(led0), okay)
+    const struct gpio_dt_spec led_spec = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+    hal_gpio_pin_t led_pin = {
+        .port = led_spec.port,
+        .pin = led_spec.pin,
+        .extra_flags = led_spec.dt_flags,
+    };
+    HAL_LOG_INFO("TEST", "Configuring LED0 on port %s pin %u", led_pin.port->name, led_pin.pin);
+#else
+    hal_gpio_pin_t led_pin = HAL_GPIO_PIN_INIT(DEVICE_DT_GET(DT_NODELABEL(gpio0)), 28);
+#endif
+
+    if (hal_gpio_init_output(&led_pin, 1) == 0) {
+        HAL_LOG_INFO("TEST", "LED initial state: %d", hal_gpio_get(&led_pin));
+        hal_delay_ms(250);
+        hal_gpio_set(&led_pin, false);
+        HAL_LOG_INFO("TEST", "LED state after write(0): %d", hal_gpio_get(&led_pin));
+    }
+
+    /* 4. Timer Abstraction (blink LED for 1.5 seconds) */
+    hal_timer_t timer;
+    hal_timer_init(&timer, test_timer_callback, &led_pin);
+    HAL_LOG_INFO("TEST", "Starting 200ms periodic timer (blinking LED)...");
+    hal_timer_start_periodic(&timer, 200);
+
+    /* Wait 1.5 seconds to observe timer ticks & LED blinking */
+    hal_delay_ms(1500);
+
+    hal_timer_stop(&timer);
+    HAL_LOG_INFO("TEST", "Timer stopped. Total callback firings: %u", s_timer_ticks);
+    HAL_LOG_INFO("TEST", "HAL Self-Test Complete! Proceeding to main application...");
+    HAL_LOG_INFO("TEST", "========================================");
+}
 
 #define SCRIPT_BUFFER_SIZE 8192
 #define CHAR_CTRL_C 0x03
@@ -59,6 +124,9 @@ static void do_str(const char *src)
 int main(void)
 {
     printk("=== [HARDWARE BOOT] Starting Zephyr MicroPython UART Script Streamer ===\n");
+
+    /* Run Hardware Abstraction Layer self-test */
+    run_hal_self_test();
 
     /* Initial boot of MicroPython runtime */
     mp_runner_init();

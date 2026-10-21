@@ -1,35 +1,16 @@
 import time
 from machine import Pin
 
-print("=== Starting Pin Diagnostic Scan ===")
+# Port 0 device name mapped from the Zephyr devicetree
+GPIO0 = "gpio@842500"
+LED0_PIN = 28
 
-# Try common Zephyr device tree label names and pin ranges
-found = False
-for port_name in ["gpio0", "gpio1", "GPIO_0", "GPIO_1"]:
-    for pin_num in range(32):
-        try:
-            p = Pin((port_name, pin_num), Pin.OUT)
-            print(f"SUCCESS: Found valid pin -> ({port_name}, {pin_num})")
-            p.value(0)
-            time.sleep(0.1)
-            p.value(1)
-            found = True
-            break
-        except Exception as e:
-            pass
-    if found:
-        break
+# Initialize LED0 as an output
+led = Pin((GPIO0, LED0_PIN), Pin.OUT)
 
-if not found:
-    print("Trying absolute integer pins...")
-    for pin_num in range(64):
-        try:
-            p = Pin(pin_num, Pin.OUT)
-            print(f"SUCCESS: Found absolute pin -> {pin_num}")
-            p.value(0)
-            time.sleep(0.1)
-            p.value(1)
-        except Exception:
-            pass
-
-print("=== Scan Finished ===")
+# Blink 5 times
+for i in range(5):
+    led.value(0)  # Active-low ON
+    time.sleep(2)
+    led.value(1)  # Active-low OFF
+    time.sleep(0.5)
