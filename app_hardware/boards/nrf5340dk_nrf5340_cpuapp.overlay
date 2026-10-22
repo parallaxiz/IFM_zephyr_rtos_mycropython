@@ -1,0 +1,80 @@
+/*
+ * nRF5340 DK Devicetree Overlay — app_hardware target
+ *
+ * Defines exact hardware pin mappings for the nRF5340 DK board.
+ * Board schematic reference: nRF5340 DK v1.0 (PCA10095)
+ *
+ * LED assignments (active-low on nRF5340 DK):
+ *   LED1 = P0.28   alias led0
+ *   LED2 = P0.29   alias led1
+ *   LED3 = P0.30   alias led2
+ *   LED4 = P0.31   alias led3
+ *
+ * Button assignments (active-low, pull-up):
+ *   BTN1 = P0.23   alias sw0
+ *   BTN2 = P0.24   alias sw1
+ *   BTN3 = P0.08   alias sw2
+ *   BTN4 = P0.09   alias sw3
+ *
+ * UART0 (console / script streamer):
+ *   TX = P0.20, RX = P0.22, baud = 115200
+ */
+
+/ {
+    aliases {
+        /* Expose LED0 explicitly for use in HAL self-test and Python scripts */
+        led0 = &led0;
+        led1 = &led1;
+        led2 = &led2;
+        led3 = &led3;
+        sw0  = &button0;
+        sw1  = &button1;
+        /* Watchdog alias — required for DEVICE_DT_GET_OR_NULL(DT_ALIAS(watchdog0)) */
+        watchdog0 = &wdt0;
+    };
+
+    leds {
+        compatible = "gpio-leds";
+        led0: led_0 {
+            gpios = <&gpio0 28 GPIO_ACTIVE_LOW>;
+            label = "LED 1 (P0.28)";
+        };
+        led1: led_1 {
+            gpios = <&gpio0 29 GPIO_ACTIVE_LOW>;
+            label = "LED 2 (P0.29)";
+        };
+        led2: led_2 {
+            gpios = <&gpio0 30 GPIO_ACTIVE_LOW>;
+            label = "LED 3 (P0.30)";
+        };
+        led3: led_3 {
+            gpios = <&gpio0 31 GPIO_ACTIVE_LOW>;
+            label = "LED 4 (P0.31)";
+        };
+    };
+
+    buttons {
+        compatible = "gpio-keys";
+        button0: button_0 {
+            gpios = <&gpio0 23 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+            label = "Button 1 (P0.23)";
+        };
+        button1: button_1 {
+            gpios = <&gpio0 24 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+            label = "Button 2 (P0.24)";
+        };
+    };
+};
+
+/* UART0: console and Python script UART streamer */
+&uart0 {
+    status = "okay";
+    current-speed = <115200>;
+    pinctrl-0 = <&uart0_default>;
+    pinctrl-names = "default";
+};
+
+/* Watchdog 0: used for script execution timeout */
+&wdt0 {
+    status = "okay";
+};
