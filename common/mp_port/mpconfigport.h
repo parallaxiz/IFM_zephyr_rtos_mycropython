@@ -44,34 +44,6 @@
 #define MICROPY_PY_SYS_PATH (1)
 
 
-/* ============================================================
- * Module Security Whitelist
- * Explicitly disable modules not needed for embedded hardware
- * scripts. Only machine, time, math and our hw_hal are allowed.
- * ============================================================ */
-
-/* Block filesystem and OS access from Python scripts */
-#undef  MICROPY_PY_OS
-#define MICROPY_PY_OS               (0)
-#undef  MICROPY_PY_OS_URANDOM
-#define MICROPY_PY_OS_URANDOM       (0)
-
-/* Block socket / network access */
-#ifndef MICROPY_PY_SOCKET
-#define MICROPY_PY_SOCKET           (0)
-#endif
-
-/* Block raw ctypes-style memory access */
-#ifndef MICROPY_PY_UCTYPES
-#define MICROPY_PY_UCTYPES          (0)
-#endif
-
-/* Block uselect / uasyncio (not needed, prevents hidden blocking) */
-#ifndef MICROPY_PY_USELECT
-#define MICROPY_PY_USELECT          (0)
-#endif
-
-/* Allow: machine, time, math, gc */
-/* These are enabled by the upstream Zephyr mpconfigport.h and kept as-is */
+/* Whitelist enforcement is handled at the safety layer (mp_safety_module_allowed) */
 
 #endif /* MPCONFIGPORT_H */

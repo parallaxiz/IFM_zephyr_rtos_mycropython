@@ -1,6 +1,16 @@
 # Zephyr build output
 build/
+build_*/
 twister-out/
+twister-out.*/
+
+# West workspace files
+.west/
+bootloader/
+modules/
+zephyr/
+tools/edtt/
+tools/net-tools/
 
 # Python virtual environment
 *.pyc

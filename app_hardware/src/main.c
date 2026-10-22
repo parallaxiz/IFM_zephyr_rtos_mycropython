@@ -44,6 +44,9 @@
 #include <zephyr/drivers/watchdog.h>
 #include "uart_protocol.h"
 #include "mp_safety.h"
+#include "version.h"
+#include "fault_log.h"
+#include "power_mgmt.h"
 
 /* ========================================================================= */
 /*                     Script UART device binding                             */
@@ -130,15 +133,31 @@ static void run_hal_self_test(void)
     HAL_LOG_INFO("TEST", "========================================");
 }
 
-/* ========================================================================= */
-/*                          Main entry point                                  */
-/* ========================================================================= */
+static int send_response(const struct device *dev, const char *msg)
+{
+    if (dev == NULL || msg == NULL) {
+        return -EINVAL;
+    }
+    return uart_proto_send_frame(dev, (const uint8_t *)msg, strlen(msg));
+}
 
 int main(void)
 {
     printk("=== [HARDWARE BOOT] Zephyr MicroPython UART Script Streamer ===\n");
+    printk("[BOOT] Firmware: %s (%s)\n", fw_version_get_string(), fw_version_get_build_timestamp());
     printk("[BOOT] Protocol: CRC-16 framing (uart_protocol.c)\n");
     printk("[BOOT] Safety:   watchdog + heap guard + size limit + whitelist\n");
+
+    /* Initialise persistent fault logging & boot counter */
+    fault_log_init();
+    uint32_t boot_cnt = 0;
+    bool crash_loop = false;
+    fault_log_boot_counter_increment(&boot_cnt, &crash_loop);
+    printk("[BOOT] Boot counter: %u%s\n", boot_cnt, crash_loop ? " [CRASH LOOP DETECTED!]" : "");
+    if (crash_loop) {
+        printk("[BOOT] Safety hold: delaying 3 seconds to mitigate crash loop...\n");
+        k_msleep(3000);
+    }
 
     /* ------------------------------------------------------------------ */
     /* 1. Initialise the watchdog – must be first to avoid silent hangs   */
@@ -200,20 +219,19 @@ int main(void)
             switch (recv_ret) {
             case UART_PROTO_ERR_CRC:
                 printk("[MAIN] Frame discarded: CRC mismatch.\n");
-                /* Send NACK */
-                uart_proto_send_frame(s_script_uart, "NACK:CRC");
+                send_response(s_script_uart, "NACK:CRC");
                 break;
             case UART_PROTO_ERR_TOO_LARGE:
                 printk("[MAIN] Frame discarded: payload too large.\n");
-                uart_proto_send_frame(s_script_uart, "NACK:SIZE");
+                send_response(s_script_uart, "NACK:SIZE");
                 break;
             case UART_PROTO_ERR_TIMEOUT:
                 printk("[MAIN] Frame discarded: inter-byte timeout.\n");
-                uart_proto_send_frame(s_script_uart, "NACK:TIMEOUT");
+                send_response(s_script_uart, "NACK:TIMEOUT");
                 break;
             default:
                 printk("[MAIN] Frame error: %d\n", recv_ret);
-                uart_proto_send_frame(s_script_uart, "NACK:ERR");
+                send_response(s_script_uart, "NACK:ERR");
                 break;
             }
             continue;
@@ -222,7 +240,7 @@ int main(void)
         /* Empty ping frame – just ACK and loop */
         if (script_len == 0u) {
             printk("[MAIN] Ping frame received, sending ACK.\n");
-            uart_proto_send_frame(s_script_uart, "ACK:PING");
+            send_response(s_script_uart, "ACK:PING");
             continue;
         }
 
@@ -231,12 +249,12 @@ int main(void)
         /* Safety: size is already checked by uart_protocol, but double-check */
         if (!mp_safety_script_allowed(s_script_buf)) {
             printk("[MAIN] Script rejected by safety layer.\n");
-            uart_proto_send_frame(s_script_uart, "NACK:SAFETY");
+            send_response(s_script_uart, "NACK:SAFETY");
             continue;
         }
 
         /* ACK receipt before VM execution (let host know we have it) */
-        uart_proto_send_frame(s_script_uart, "ACK:RX");
+        send_response(s_script_uart, "ACK:RX");
 
         /* Init VM, run script, deinit */
         printk("[MAIN] Initialising MicroPython VM...\n");
@@ -251,10 +269,10 @@ int main(void)
 
         if (exec_ret == 0) {
             printk("[MAIN] Script OK.\n");
-            uart_proto_send_frame(s_script_uart, "ACK:EXEC_OK");
+            send_response(s_script_uart, "ACK:EXEC_OK");
         } else {
             printk("[MAIN] Script execution error.\n");
-            uart_proto_send_frame(s_script_uart, "NACK:EXEC_ERR");
+            send_response(s_script_uart, "NACK:EXEC_ERR");
         }
 
         /* Heap guard – may reboot if heap is critically low */

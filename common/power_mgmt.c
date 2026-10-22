@@ -77,6 +77,7 @@ int pm_gpio_restore_all_low_power(void)
 
     int disconnected_count = 0;
 
+#if defined(CONFIG_GPIO)
 #if DT_NODE_HAS_STATUS(DT_ALIAS(led0), okay)
     const struct gpio_dt_spec led0 = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
     if (device_is_ready(led0.port)) {
@@ -92,6 +93,7 @@ int pm_gpio_restore_all_low_power(void)
         disconnected_count++;
     }
 #endif
+#endif
 
     HAL_LOG_INFO("POWER_MGMT", "Successfully put %d peripheral pin(s) into low-power disconnected state",
                  disconnected_count);
@@ -102,10 +104,10 @@ int pm_gpio_restore_all_low_power(void)
 /*              3. EVENT-DRIVEN UART RECEPTION (TICKLESS IDLE)               */
 /* ========================================================================= */
 
+#if defined(CONFIG_UART_INTERRUPT_DRIVEN)
 static pm_uart_rx_cb_t s_rx_cb = NULL;
 static void *s_rx_user_data = NULL;
 
-#if defined(CONFIG_UART_INTERRUPT_DRIVEN)
 static void pm_uart_isr(const struct device *dev, void *user_data)
 {
     ARG_UNUSED(user_data);

@@ -31,6 +31,7 @@ extern "C" {
 #define UART_PROTO_CRC_SIZE         2u
 #define UART_PROTO_OVERHEAD         (UART_PROTO_HEADER_SIZE + UART_PROTO_CRC_SIZE)
 #define UART_PROTO_MAX_PAYLOAD      6000u
+#define UART_PROTO_MAX_SCRIPT_LEN   UART_PROTO_MAX_PAYLOAD
 #define UART_PROTO_MAX_FRAME_SIZE   (UART_PROTO_MAX_PAYLOAD + UART_PROTO_OVERHEAD)
 
 /* Receive timeout waiting for the full frame (ms) */

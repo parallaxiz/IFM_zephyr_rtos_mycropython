@@ -18,8 +18,12 @@ extern "C" {
 
 #define FW_VERSION_TAG   "release"
 
+#ifndef STRINGIFY
 #define STRINGIFY(x) #x
+#endif
+#ifndef TOSTRING
 #define TOSTRING(x)  STRINGIFY(x)
+#endif
 
 #define FW_VERSION_STRING \
     "v" TOSTRING(FW_VERSION_MAJOR) "." TOSTRING(FW_VERSION_MINOR) "." TOSTRING(FW_VERSION_PATCH)

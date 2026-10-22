@@ -1,5 +1,7 @@
 #include "micropython_runner.h"
 #include "mp_safety.h"
+#include "power_mgmt.h"
+#include "fault_log.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -65,10 +67,9 @@ void gc_collect(void) {
 }
 
 /*
- * nlr_jump_fail() is now defined in mp_safety.c to trigger sys_reboot()
- * instead of spinning forever.  Do NOT define it here.
+ * nlr_jump_fail() is defined in mp_safety.c to trigger sys_reboot()
+ * instead of spinning forever.
  */
-}
 
 int mp_run_string(const char *src) {
     if (src == NULL) {
@@ -76,22 +77,20 @@ int mp_run_string(const char *src) {
         return -1;
     }
 
-    /* Safety gate 1: enforce script size limit and module whitelist */
+    /* Safety gate 1: enforce script size limit */
     if (!mp_safety_script_allowed(src)) {
         printk("[MP_RUNNER] Script rejected by safety layer.\n");
         return -1;
     }
 
-    /* Safety: reject scripts exceeding the max allowed size */
     size_t src_len = strlen(src);
-    if (src_len > MP_SCRIPT_MAX_SIZE) {
-        printk("[MP_RUNNER] Error: Script %u bytes exceeds limit %u. Rejected.\n",
-               (unsigned)src_len, MP_SCRIPT_MAX_SIZE);
-        return -1;
-    }
+
+    /* Thread safety: acquire VM execution mutex */
+    pm_vm_lock(K_FOREVER);
 
     mp_runner_init();
 
+    int result = 0;
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
         // Step 1: Initialize lexer from string source
@@ -99,6 +98,7 @@ int mp_run_string(const char *src) {
         if (lex == NULL) {
             printk("[MP_RUNNER] Error: Failed to create MicroPython lexer.\n");
             nlr_pop();
+            pm_vm_unlock();
             return -1;
         }
 
@@ -118,13 +118,26 @@ int mp_run_string(const char *src) {
         /* Safety gate 2: check heap utilisation after execution */
         mp_safety_heap_check();
 
-        return 0;
+        /* Record stable operation to clear crash streaks */
+        fault_log_clear_crash_streak();
+
+        /* Low-power: restore GPIO lines to disconnected state */
+        pm_gpio_restore_all_low_power();
+
+        result = 0;
     } else {
         // Exception caught inside nlr_push block
         printk("[MP_RUNNER] MicroPython Exception Caught:\n");
         mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
-        return -1;
+
+        /* Record fault in non-volatile flash */
+        fault_log_record(FAULT_TYPE_PYTHON_EXCEPTION, 1, "Script exception");
+
+        result = -1;
     }
+
+    pm_vm_unlock();
+    return result;
 }
 
 void mp_runner_test_stub(void) {

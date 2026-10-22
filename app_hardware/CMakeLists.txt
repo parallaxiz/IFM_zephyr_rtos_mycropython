@@ -51,8 +51,8 @@ set(MICROPY_SOURCE_QSTR
 target_sources(app PRIVATE
     ${MICROPY_SOURCE_QSTR}
     ${COMMON_DIR}/hw_hal.c
-    ${COMMON_DIR}/mp_safety.c
-    ${COMMON_DIR}/uart_protocol.c
+    ${COMMON_DIR}/power_mgmt.c
+    ${COMMON_DIR}/fault_log.c
 )
 
 target_include_directories(app PRIVATE

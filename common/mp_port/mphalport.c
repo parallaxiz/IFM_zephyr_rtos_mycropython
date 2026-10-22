@@ -23,7 +23,11 @@ uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
 }
 
 int mp_hal_stdin_rx_chr(void) {
+#if defined(CONFIG_CONSOLE_GETCHAR)
     return console_getchar();
+#else
+    return -1;
+#endif
 }
 
 mp_uint_t mp_hal_stdout_tx_strn(const char *str, size_t len) {
