@@ -1,12 +1,33 @@
+/**
+ * @file main.c  (app_hardware)
+ * @brief Hardware application entry point.
+ *
+ * Receives Python scripts over UART1 using the CRC-16 framing protocol
+ * defined in uart_protocol.h, then executes them in the MicroPython VM.
+ *
+ * Safety features:
+ *  - Watchdog: system auto-reboots if the main loop stalls
+ *  - Heap guard: checked after every script execution
+ *  - Script size limit: enforced before passing to the VM
+ *  - Module whitelist: only approved modules may be imported
+ *  - nlr_jump_fail(): triggers cold reboot instead of spinning
+ *
+ * Hardware target: nRF5340 DK (nrf5340dk/nrf5340/cpuapp)
+ *   Console:        UART0 (on-board USB CDC-ACM) -> printk / debug output
+ *   Script UART:    UART1 (P1.02=TX, P1.01=RX, 115200 baud, no h/w flow)
+ */
+
 #ifndef NO_QSTR
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
-#include <zephyr/console/console.h>
+#include <zephyr/drivers/gpio.h>
 #endif
+
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
 
+/* MicroPython headers (needed for the inline do_str helper) */
 #include "py/compile.h"
 #include "py/runtime.h"
 #include "py/gc.h"
@@ -16,47 +37,75 @@
 #include "py/nlr.h"
 #include "py/obj.h"
 #include "py/mphal.h"
+
+/* Project headers */
 #include "micropython_runner.h"
 #include "hw_hal.h"
+#include <zephyr/drivers/watchdog.h>
+#include "uart_protocol.h"
+#include "mp_safety.h"
 
-/* Simple self-test demonstrating all 4 HAL abstractions on physical target */
-static volatile uint32_t s_timer_ticks = 0;
+/* ========================================================================= */
+/*                     Script UART device binding                             */
+/* ========================================================================= */
+
+/*
+ * Use DT alias "script-uart" defined in the .overlay file.
+ * Falls back gracefully when building for native_sim (alias absent).
+ */
+#if DT_NODE_EXISTS(DT_ALIAS(script_uart))
+#  define SCRIPT_UART_NODE DT_ALIAS(script_uart)
+#else
+/* native_sim fallback – use the console UART so CI still builds */
+#  define SCRIPT_UART_NODE DT_CHOSEN(zephyr_console)
+#endif
+
+static const struct device *s_script_uart;
+
+/* Static receive buffer (sized to match protocol limit + NUL byte) */
+static char s_script_buf[UART_PROTO_MAX_SCRIPT_LEN + 1u];
+
+/* ========================================================================= */
+/*                          HAL self-test                                     */
+/* ========================================================================= */
+
+static volatile uint32_t s_timer_ticks = 0u;
+
 static void test_timer_callback(void *user_data)
 {
-    hal_gpio_pin_t *led = (hal_gpio_pin_t *)user_data;
-    if (led != NULL) {
-        hal_gpio_toggle(led);
-    }
+    hal_gpio_pin_t *pin = (hal_gpio_pin_t *)user_data;
     s_timer_ticks++;
+    hal_gpio_toggle(pin);
 }
 
+/**
+ * @brief Quick HAL smoke test: UART tx, GPIO output, periodic timer.
+ *
+ * Runs once at startup to confirm HAL primitives work before the
+ * script receiver loop is entered.
+ */
 static void run_hal_self_test(void)
 {
     HAL_LOG_INFO("TEST", "========================================");
-    HAL_LOG_INFO("TEST", "Starting Hardware HAL Self-Test on nRF Board");
-    HAL_LOG_INFO("TEST", "========================================");
+    HAL_LOG_INFO("TEST", "HAL Self-Test Starting...");
 
-    /* 1. Logging verification */
-    HAL_LOG_DEBUG("TEST", "Testing DEBUG level message");
-    HAL_LOG_INFO("TEST",  "Testing INFO level message with uptime: %llu ms", hal_uptime_ms());
-    HAL_LOG_WARN("TEST",  "Testing WARN level message");
-    HAL_LOG_ERROR("TEST", "Testing ERROR level message");
-
-    /* 2. UART Abstraction */
-    const struct device *uart = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
-    if (hal_uart_init(uart) == 0) {
-        hal_uart_send_str(uart, "[HAL_UART] Direct UART string transmission verified!\r\n");
+    /* 1. UART abstraction – send a banner on the console UART */
+    const struct device *console_uart = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+    if (hal_uart_init(console_uart) == 0) {
+        hal_uart_send_str(console_uart,
+                          "[HAL_UART] Direct UART string transmission verified!\r\n");
     }
 
-    /* 3. GPIO Abstraction (using board's led0 alias) */
+    /* 2. GPIO Abstraction (using board's led0 alias when available) */
 #if DT_NODE_HAS_STATUS(DT_ALIAS(led0), okay)
     const struct gpio_dt_spec led_spec = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
     hal_gpio_pin_t led_pin = {
-        .port = led_spec.port,
-        .pin = led_spec.pin,
+        .port        = led_spec.port,
+        .pin         = led_spec.pin,
         .extra_flags = led_spec.dt_flags,
     };
-    HAL_LOG_INFO("TEST", "Configuring LED0 on port %s pin %u", led_pin.port->name, led_pin.pin);
+    HAL_LOG_INFO("TEST", "Configuring LED0 on port %s pin %u",
+                 led_pin.port->name, led_pin.pin);
 #else
     hal_gpio_pin_t led_pin = HAL_GPIO_PIN_INIT(DEVICE_DT_GET(DT_NODELABEL(gpio0)), 28);
 #endif
@@ -68,126 +117,150 @@ static void run_hal_self_test(void)
         HAL_LOG_INFO("TEST", "LED state after write(0): %d", hal_gpio_get(&led_pin));
     }
 
-    /* 4. Timer Abstraction (blink LED for 1.5 seconds) */
+    /* 3. Timer abstraction – blink LED for 1.5 s using a 200 ms periodic timer */
     hal_timer_t timer;
     hal_timer_init(&timer, test_timer_callback, &led_pin);
-    HAL_LOG_INFO("TEST", "Starting 200ms periodic timer (blinking LED)...");
-    hal_timer_start_periodic(&timer, 200);
-
-    /* Wait 1.5 seconds to observe timer ticks & LED blinking */
-    hal_delay_ms(1500);
-
+    HAL_LOG_INFO("TEST", "Starting 200 ms periodic timer (blinking LED)...");
+    hal_timer_start_periodic(&timer, 200u);
+    hal_delay_ms(1500u);
     hal_timer_stop(&timer);
+
     HAL_LOG_INFO("TEST", "Timer stopped. Total callback firings: %u", s_timer_ticks);
     HAL_LOG_INFO("TEST", "HAL Self-Test Complete! Proceeding to main application...");
     HAL_LOG_INFO("TEST", "========================================");
 }
 
-#define SCRIPT_BUFFER_SIZE 8192
-#define CHAR_CTRL_C 0x03
-#define CHAR_CTRL_D 0x04
-
-static char script_buffer[SCRIPT_BUFFER_SIZE];
-
-/**
- * @brief Parse, compile, and execute a Python script string in the MicroPython VM.
- *
- * @param src Null-terminated string containing Python source code.
- */
-static void do_str(const char *src)
-{
-    if (src == NULL || strlen(src) == 0) {
-        return;
-    }
-
-    nlr_buf_t nlr;
-    if (nlr_push(&nlr) == 0) {
-        mp_lexer_t *lex = mp_lexer_new_from_str_len(MP_QSTR__lt_stdin_gt_, src, strlen(src), 0);
-        if (lex == NULL) {
-            printk("[HARDWARE] Error: Failed to create MicroPython lexer.\n");
-            nlr_pop();
-            return;
-        }
-
-        qstr source_name = lex->source_name;
-        mp_parse_tree_t parse_tree = mp_parse(lex, MP_PARSE_FILE_INPUT);
-        mp_obj_t module_fun = mp_compile(&parse_tree, source_name, false);
-        mp_call_function_0(module_fun);
-        nlr_pop();
-    } else {
-        /* Exception caught inside nlr_push block */
-        printk("[HARDWARE] MicroPython Exception Caught:\n");
-        mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
-    }
-}
+/* ========================================================================= */
+/*                          Main entry point                                  */
+/* ========================================================================= */
 
 int main(void)
 {
-    printk("=== [HARDWARE BOOT] Starting Zephyr MicroPython UART Script Streamer ===\n");
+    printk("=== [HARDWARE BOOT] Zephyr MicroPython UART Script Streamer ===\n");
+    printk("[BOOT] Protocol: CRC-16 framing (uart_protocol.c)\n");
+    printk("[BOOT] Safety:   watchdog + heap guard + size limit + whitelist\n");
 
-    /* Run Hardware Abstraction Layer self-test */
+    /* ------------------------------------------------------------------ */
+    /* 1. Initialise the watchdog – must be first to avoid silent hangs   */
+    /* ------------------------------------------------------------------ */
+    int wdt_ret = mp_safety_wdt_init();
+    if (wdt_ret != 0 && wdt_ret != -ENODEV) {
+        /* Non-fatal: log and continue without WDT */
+        printk("[BOOT] WARNING: WDT init returned %d\n", wdt_ret);
+    }
+    mp_safety_wdt_kick();
+
+    /* ------------------------------------------------------------------ */
+    /* 2. HAL smoke test                                                   */
+    /* ------------------------------------------------------------------ */
     run_hal_self_test();
+    mp_safety_wdt_kick();
 
-    /* Initial boot of MicroPython runtime */
+    /* ------------------------------------------------------------------ */
+    /* 3. Verify script UART device                                        */
+    /* ------------------------------------------------------------------ */
+    s_script_uart = DEVICE_DT_GET(SCRIPT_UART_NODE);
+    if (!device_is_ready(s_script_uart)) {
+        printk("[BOOT] ERROR: Script UART device '%s' not ready!\n",
+               s_script_uart->name);
+        return -EIO;
+    }
+    printk("[BOOT] Script UART '%s' ready at 115200 baud.\n",
+           s_script_uart->name);
+
+    /* ------------------------------------------------------------------ */
+    /* 4. Boot MicroPython once to pre-initialise internals               */
+    /* ------------------------------------------------------------------ */
     mp_runner_init();
     mp_runner_deinit();
+    mp_safety_wdt_kick();
 
-    /* Initialize Zephyr console subsystem for character input */
-    if (console_init() != 0) {
-        printk("[HARDWARE] Error: console_init() failed!\n");
-        return -1;
-    }
-
-    printk("[HARDWARE] Console initialized successfully.\n");
+    /* ------------------------------------------------------------------ */
+    /* 5. Main receive-execute loop                                        */
+    /* ------------------------------------------------------------------ */
+    printk("\n[MAIN] Entering script receive loop.\n");
+    printk("[MAIN] Send a framed Python script (magic=0xABCD, CRC-16).\n\n");
 
     while (1) {
-        printk("\n=== [HARDWARE] Awaiting Python script stream over UART (End with Ctrl+D / 0x04) ===\n");
+        /* Kick WDT at the top of each iteration */
+        mp_safety_wdt_kick();
 
-        size_t script_len = 0;
+        printk("[MAIN] Waiting for framed script on '%s'...\n",
+               s_script_uart->name);
 
-        while (1) {
-            int c = console_getchar();
-            if (c < 0) {
-                k_msleep(10);
-                continue;
-            }
+        size_t script_len = 0u;
+        int    recv_ret   = uart_proto_receive_frame(s_script_uart,
+                                                    s_script_buf,
+                                                    sizeof(s_script_buf),
+                                                    &script_len);
 
-            if (c == CHAR_CTRL_D) {
-                /* End of transmission */
+        mp_safety_wdt_kick();  /* frame could take a while to arrive */
+
+        if (recv_ret != UART_PROTO_OK) {
+            switch (recv_ret) {
+            case UART_PROTO_ERR_CRC:
+                printk("[MAIN] Frame discarded: CRC mismatch.\n");
+                /* Send NACK */
+                uart_proto_send_frame(s_script_uart, "NACK:CRC");
                 break;
-            } else if (c == CHAR_CTRL_C) {
-                /* Cancel/Reset input buffer */
-                printk("\n[HARDWARE] Stream input canceled via Ctrl+C.\n");
-                script_len = 0;
+            case UART_PROTO_ERR_TOO_LARGE:
+                printk("[MAIN] Frame discarded: payload too large.\n");
+                uart_proto_send_frame(s_script_uart, "NACK:SIZE");
                 break;
-            } else {
-                if (script_len < sizeof(script_buffer) - 1) {
-                    script_buffer[script_len++] = (char)c;
-                } else {
-                    printk("\n[HARDWARE] Warning: Script buffer full, ignoring incoming characters!\n");
-                }
+            case UART_PROTO_ERR_TIMEOUT:
+                printk("[MAIN] Frame discarded: inter-byte timeout.\n");
+                uart_proto_send_frame(s_script_uart, "NACK:TIMEOUT");
+                break;
+            default:
+                printk("[MAIN] Frame error: %d\n", recv_ret);
+                uart_proto_send_frame(s_script_uart, "NACK:ERR");
+                break;
             }
-        }
-
-        if (script_len == 0) {
             continue;
         }
 
-        script_buffer[script_len] = '\0';
+        /* Empty ping frame – just ACK and loop */
+        if (script_len == 0u) {
+            printk("[MAIN] Ping frame received, sending ACK.\n");
+            uart_proto_send_frame(s_script_uart, "ACK:PING");
+            continue;
+        }
 
-        printk("=== [HARDWARE] Received script (%u bytes). Initializing MicroPython VM... ===\n", (unsigned int)script_len);
+        printk("[MAIN] Received %zu-byte script. Validating...\n", script_len);
 
-        /* Initialize MicroPython VM environment for fresh execution */
+        /* Safety: size is already checked by uart_protocol, but double-check */
+        if (!mp_safety_script_allowed(s_script_buf)) {
+            printk("[MAIN] Script rejected by safety layer.\n");
+            uart_proto_send_frame(s_script_uart, "NACK:SAFETY");
+            continue;
+        }
+
+        /* ACK receipt before VM execution (let host know we have it) */
+        uart_proto_send_frame(s_script_uart, "ACK:RX");
+
+        /* Init VM, run script, deinit */
+        printk("[MAIN] Initialising MicroPython VM...\n");
         mp_runner_init();
+        mp_safety_wdt_kick();
 
-        printk("=== [HARDWARE] Dynamically executing script ===\n");
-        do_str(script_buffer);
+        printk("[MAIN] Executing script...\n");
+        int exec_ret = mp_run_string(s_script_buf);
+        mp_safety_wdt_kick();
 
-        /* Clean up MicroPython VM state */
         mp_runner_deinit();
-        printk("=== [HARDWARE] Script execution completed, VM deinitialized ===\n");
+
+        if (exec_ret == 0) {
+            printk("[MAIN] Script OK.\n");
+            uart_proto_send_frame(s_script_uart, "ACK:EXEC_OK");
+        } else {
+            printk("[MAIN] Script execution error.\n");
+            uart_proto_send_frame(s_script_uart, "NACK:EXEC_ERR");
+        }
+
+        /* Heap guard – may reboot if heap is critically low */
+        mp_safety_heap_check();
     }
 
+    /* Unreachable */
     return 0;
 }
-

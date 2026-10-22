@@ -1,10 +1,12 @@
 #include "micropython_runner.h"
+#include "mp_safety.h"
 
 #include <stdio.h>
 #include <string.h>
 
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
+#include <zephyr/sys/reboot.h>
 
 /* MicroPython core headers */
 #include "py/mpconfig.h"
@@ -22,6 +24,9 @@
 #ifndef MICROPY_HEAP_SIZE
 #define MICROPY_HEAP_SIZE (48 * 1024)
 #endif
+
+/* Maximum allowed Python script size -- reject oversized scripts before execution */
+#define MP_SCRIPT_MAX_SIZE 6000U
 
 static char mp_heap[MICROPY_HEAP_SIZE];
 static bool mp_is_initialized = false;
@@ -59,11 +64,10 @@ void gc_collect(void) {
     gc_collect_end();
 }
 
-NORETURN void nlr_jump_fail(void *val) {
-    printk("[MP_RUNNER] FATAL: Uncaught NLR exception!\n");
-    while (1) {
-        k_sleep(K_FOREVER);
-    }
+/*
+ * nlr_jump_fail() is now defined in mp_safety.c to trigger sys_reboot()
+ * instead of spinning forever.  Do NOT define it here.
+ */
 }
 
 int mp_run_string(const char *src) {
@@ -72,12 +76,26 @@ int mp_run_string(const char *src) {
         return -1;
     }
 
+    /* Safety gate 1: enforce script size limit and module whitelist */
+    if (!mp_safety_script_allowed(src)) {
+        printk("[MP_RUNNER] Script rejected by safety layer.\n");
+        return -1;
+    }
+
+    /* Safety: reject scripts exceeding the max allowed size */
+    size_t src_len = strlen(src);
+    if (src_len > MP_SCRIPT_MAX_SIZE) {
+        printk("[MP_RUNNER] Error: Script %u bytes exceeds limit %u. Rejected.\n",
+               (unsigned)src_len, MP_SCRIPT_MAX_SIZE);
+        return -1;
+    }
+
     mp_runner_init();
 
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
         // Step 1: Initialize lexer from string source
-        mp_lexer_t *lex = mp_lexer_new_from_str_len(MP_QSTR__lt_stdin_gt_, src, strlen(src), 0);
+        mp_lexer_t *lex = mp_lexer_new_from_str_len(MP_QSTR__lt_stdin_gt_, src, src_len, 0);
         if (lex == NULL) {
             printk("[MP_RUNNER] Error: Failed to create MicroPython lexer.\n");
             nlr_pop();
@@ -96,6 +114,10 @@ int mp_run_string(const char *src) {
 
         nlr_pop();
         printk("[MP_RUNNER] Script executed successfully.\n");
+
+        /* Safety gate 2: check heap utilisation after execution */
+        mp_safety_heap_check();
+
         return 0;
     } else {
         // Exception caught inside nlr_push block

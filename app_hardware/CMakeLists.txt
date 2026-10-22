@@ -40,6 +40,8 @@ set(MICROPY_SOURCE_QSTR
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.c
     ${COMMON_DIR}/micropython_runner.c
     ${COMMON_DIR}/mp_port/mphalport.c
+    ${COMMON_DIR}/mp_safety.c
+    ${COMMON_DIR}/uart_protocol.c
     ${MICROPY_SOURCE_PY}
     ${MICROPY_SOURCE_EXTMOD}
     ${MICROPY_SOURCE_SHARED}
@@ -49,6 +51,8 @@ set(MICROPY_SOURCE_QSTR
 target_sources(app PRIVATE
     ${MICROPY_SOURCE_QSTR}
     ${COMMON_DIR}/hw_hal.c
+    ${COMMON_DIR}/mp_safety.c
+    ${COMMON_DIR}/uart_protocol.c
 )
 
 target_include_directories(app PRIVATE
