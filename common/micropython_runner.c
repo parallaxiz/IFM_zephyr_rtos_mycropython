@@ -33,8 +33,26 @@
 static char mp_heap[MICROPY_HEAP_SIZE];
 static bool mp_is_initialized = false;
 
+static struct k_timer s_execution_timer;
+static bool s_timer_initialized = false;
+
+static void execution_timer_expiry_cb(struct k_timer *timer_id)
+{
+    ARG_UNUSED(timer_id);
+    printk("[MP_RUNNER] Soft execution timeout (5s) expired! Safely aborting VM...\n");
+#if MICROPY_ENABLE_VM_ABORT
+    mp_sched_vm_abort();
+#endif
+    mp_safety_wdt_kick();
+}
+
 void mp_runner_init(void) {
     if (!mp_is_initialized) {
+        if (!s_timer_initialized) {
+            k_timer_init(&s_execution_timer, execution_timer_expiry_cb, NULL);
+            s_timer_initialized = true;
+        }
+
         volatile int stack_dummy = 0;
         mp_stack_ctrl_init();
         mp_stack_set_top((void *)&stack_dummy);
@@ -54,6 +72,7 @@ void mp_runner_init(void) {
 
 void mp_runner_deinit(void) {
     if (mp_is_initialized) {
+        k_timer_stop(&s_execution_timer);
         mp_deinit();
         mp_is_initialized = false;
         printk("[VM_INIT] MicroPython runtime deinitialized.\n");
@@ -92,12 +111,18 @@ int mp_run_string(const char *src) {
 
     int result = 0;
     nlr_buf_t nlr;
+#if MICROPY_ENABLE_VM_ABORT
+    nlr_set_abort(&nlr);
+#endif
     if (nlr_push(&nlr) == 0) {
         // Step 1: Initialize lexer from string source
         mp_lexer_t *lex = mp_lexer_new_from_str_len(MP_QSTR__lt_stdin_gt_, src, src_len, 0);
         if (lex == NULL) {
             printk("[MP_RUNNER] Error: Failed to create MicroPython lexer.\n");
             nlr_pop();
+#if MICROPY_ENABLE_VM_ABORT
+            nlr_set_abort(NULL);
+#endif
             pm_vm_unlock();
             return -1;
         }
@@ -109,10 +134,19 @@ int mp_run_string(const char *src) {
         // Step 3: Compile parse tree to bytecode module function
         mp_obj_t module_fun = mp_compile(&parse_tree, source_name, false);
 
-        // Step 4: Execute top-level module code
+        // Step 4: Start 5-second one-shot soft execution timeout
+        k_timer_start(&s_execution_timer, K_SECONDS(5), K_NO_WAIT);
+
+        // Execute top-level module code
         mp_call_function_0(module_fun);
 
+        // Execution completed cleanly: immediately stop timer
+        k_timer_stop(&s_execution_timer);
+
         nlr_pop();
+#if MICROPY_ENABLE_VM_ABORT
+        nlr_set_abort(NULL);
+#endif
         printk("[MP_RUNNER] Script executed successfully.\n");
 
         /* Safety gate 2: check heap utilisation after execution */
@@ -126,12 +160,21 @@ int mp_run_string(const char *src) {
 
         result = 0;
     } else {
-        // Exception caught inside nlr_push block
-        printk("[MP_RUNNER] MicroPython Exception Caught:\n");
-        mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
+        // Exception or timeout abort caught inside nlr_push block
+        k_timer_stop(&s_execution_timer);
+#if MICROPY_ENABLE_VM_ABORT
+        nlr_set_abort(NULL);
+#endif
+        mp_safety_wdt_kick();
 
-        /* Record fault in non-volatile flash */
-        fault_log_record(FAULT_TYPE_PYTHON_EXCEPTION, 1, "Script exception");
+        if (nlr.ret_val == NULL) {
+            printk("[MP_RUNNER] Trapped soft execution timeout (5s limit exceeded). Board stays alive.\n");
+            fault_log_record(FAULT_TYPE_PYTHON_EXCEPTION, 2, "Script timeout (5s limit)");
+        } else {
+            printk("[MP_RUNNER] MicroPython Exception Caught:\n");
+            mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
+            fault_log_record(FAULT_TYPE_PYTHON_EXCEPTION, 1, "Script exception");
+        }
 
         result = -1;
     }

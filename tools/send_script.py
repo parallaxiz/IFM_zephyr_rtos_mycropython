@@ -34,6 +34,7 @@ except ImportError:
 # ── Protocol constants (must match uart_protocol.h) ──────────────────────────
 PROTO_START_BYTE    = 0xAA
 PROTO_MAX_PAYLOAD   = 6000
+SCRIPT_AUTH_TOKEN   = 0xDEADBEEF
 PROTO_CRC_POLY      = 0x1021
 PROTO_CRC_INIT      = 0xFFFF
 
@@ -52,18 +53,23 @@ def crc16_ccitt(data: bytes) -> int:
     return crc
 
 
-def build_frame(payload: bytes) -> bytes:
+def build_frame(payload: bytes, token: int = SCRIPT_AUTH_TOKEN) -> bytes:
     """
-    Construct a complete protocol frame.
-    Returns: START(1) + LEN(2) + PAYLOAD(N) + CRC(2)
+    Construct a complete protocol frame with authorization token:
+    Returns: START(1) + LEN(2) + TOKEN(4) + PAYLOAD(N) + CRC(2)
+    CRC16 is calculated over [TOKEN + PAYLOAD].
     """
     if len(payload) == 0 or len(payload) > PROTO_MAX_PAYLOAD:
         raise ValueError(f"Payload size {len(payload)} out of range (1..{PROTO_MAX_PAYLOAD})")
 
-    crc   = crc16_ccitt(payload)
+    token_bytes = struct.pack(">I", token)
+    data_to_crc = token_bytes + payload
+    crc = crc16_ccitt(data_to_crc)
+
     frame = bytes([PROTO_START_BYTE])
-    frame += struct.pack(">H", len(payload))   # big-endian 16-bit length
-    frame += payload
+    frame += struct.pack(">H", len(payload))   # big-endian 16-bit payload length
+    frame += token_bytes                       # 4-byte auth token
+    frame += payload                           # script payload
     frame += struct.pack(">H", crc)            # big-endian 16-bit CRC
     return frame
 

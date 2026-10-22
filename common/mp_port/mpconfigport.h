@@ -43,7 +43,9 @@
 
 #define MICROPY_PY_SYS_PATH (1)
 
-
-/* Whitelist enforcement is handled at the safety layer (mp_safety_module_allowed) */
+/* Enable VM abort for soft execution timeout via timer */
+#ifndef MICROPY_ENABLE_VM_ABORT
+#define MICROPY_ENABLE_VM_ABORT (1)
+#endif
 
 #endif /* MPCONFIGPORT_H */

@@ -221,6 +221,10 @@ int main(void)
                 printk("[MAIN] Frame discarded: CRC mismatch.\n");
                 send_response(s_script_uart, "NACK:CRC");
                 break;
+            case UART_PROTO_ERR_AUTH:
+                printk("[MAIN] Frame discarded: Unauthorized frame / invalid token.\n");
+                send_response(s_script_uart, "NACK:AUTH");
+                break;
             case UART_PROTO_ERR_TOO_LARGE:
                 printk("[MAIN] Frame discarded: payload too large.\n");
                 send_response(s_script_uart, "NACK:SIZE");

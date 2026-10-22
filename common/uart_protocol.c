@@ -11,9 +11,9 @@
 #include <string.h>
 
 /* ── CRC-16/CCITT (poly=0x1021, init=0xFFFF) ────────────────────────────── */
-uint16_t uart_proto_crc16(const uint8_t *data, size_t length)
+/* ── CRC-16/CCITT (poly=0x1021) ─────────────────────────────────────────── */
+uint16_t uart_proto_crc16_update(uint16_t crc, const uint8_t *data, size_t length)
 {
-    uint16_t crc = 0xFFFFu;
     for (size_t i = 0; i < length; i++) {
         crc ^= ((uint16_t)data[i] << 8);
         for (int bit = 0; bit < 8; bit++) {
@@ -25,6 +25,11 @@ uint16_t uart_proto_crc16(const uint8_t *data, size_t length)
         }
     }
     return crc;
+}
+
+uint16_t uart_proto_crc16(const uint8_t *data, size_t length)
+{
+    return uart_proto_crc16_update(0xFFFFu, data, length);
 }
 
 /* ── Internal: read one byte with timeout ───────────────────────────────── */
@@ -93,8 +98,28 @@ int uart_proto_receive_frame(const struct device *uart_dev,
         return UART_PROTO_ERR_TOO_LARGE;
     }
 
-    /* ── Step 3: Read payload bytes ──────────────────────────────────────── */
-    printk("[PROTO] Receiving %u byte payload...\n", (unsigned)payload_len);
+    /* ── Step 3: Read 4-byte authorization token ─────────────────────────── */
+    uint8_t tok_buf[UART_PROTO_TOKEN_SIZE];
+    for (size_t t = 0; t < UART_PROTO_TOKEN_SIZE; t++) {
+        if (read_byte_timeout(uart_dev, &tok_buf[t], UART_PROTO_RX_TIMEOUT_MS) != 0) {
+            printk("[PROTO] Timeout reading security token byte %u\n", (unsigned)t);
+            return UART_PROTO_ERR_TIMEOUT;
+        }
+    }
+    uint32_t received_token = ((uint32_t)tok_buf[0] << 24) |
+                              ((uint32_t)tok_buf[1] << 16) |
+                              ((uint32_t)tok_buf[2] << 8)  |
+                              (uint32_t)tok_buf[3];
+
+    if (received_token != SCRIPT_AUTH_TOKEN) {
+        printk("[SECURITY ERROR] Unauthorized frame / invalid token: 0x%08X (expected 0x%08X)\n",
+               (unsigned)received_token, (unsigned)SCRIPT_AUTH_TOKEN);
+        return UART_PROTO_ERR_AUTH;
+    }
+
+    /* ── Step 4: Read payload bytes ──────────────────────────────────────── */
+    printk("[PROTO] Receiving %u byte payload (token 0x%08X verified)...\n",
+           (unsigned)payload_len, (unsigned)received_token);
     for (uint16_t i = 0; i < payload_len; i++) {
         if (read_byte_timeout(uart_dev, (uint8_t *)&out_buf[i],
                               UART_PROTO_RX_TIMEOUT_MS) != 0) {
@@ -104,7 +129,7 @@ int uart_proto_receive_frame(const struct device *uart_dev,
     }
     out_buf[payload_len] = '\0';
 
-    /* ── Step 4: Read 2-byte CRC ─────────────────────────────────────────── */
+    /* ── Step 5: Read 2-byte CRC ─────────────────────────────────────────── */
     uint8_t crc_h, crc_l;
     if (read_byte_timeout(uart_dev, &crc_h, UART_PROTO_RX_TIMEOUT_MS) != 0 ||
         read_byte_timeout(uart_dev, &crc_l, UART_PROTO_RX_TIMEOUT_MS) != 0) {
@@ -113,8 +138,10 @@ int uart_proto_receive_frame(const struct device *uart_dev,
     }
     uint16_t received_crc = ((uint16_t)crc_h << 8) | (uint16_t)crc_l;
 
-    /* ── Step 5: Validate CRC ────────────────────────────────────────────── */
-    uint16_t computed_crc = uart_proto_crc16((const uint8_t *)out_buf, payload_len);
+    /* ── Step 6: Validate CRC over [TOKEN + PAYLOAD] ─────────────────────── */
+    uint16_t computed_crc = uart_proto_crc16_update(0xFFFFu, tok_buf, UART_PROTO_TOKEN_SIZE);
+    computed_crc = uart_proto_crc16_update(computed_crc, (const uint8_t *)out_buf, payload_len);
+
     if (computed_crc != received_crc) {
         printk("[PROTO] CRC mismatch! received=0x%04X computed=0x%04X\n",
                (unsigned)received_crc, (unsigned)computed_crc);
@@ -141,7 +168,16 @@ int uart_proto_send_frame(const struct device *uart_dev,
         return UART_PROTO_ERR_TOO_LARGE;
     }
 
-    uint16_t crc = uart_proto_crc16(payload, length);
+    uint8_t tok_buf[UART_PROTO_TOKEN_SIZE] = {
+        (uint8_t)((SCRIPT_AUTH_TOKEN >> 24) & 0xFF),
+        (uint8_t)((SCRIPT_AUTH_TOKEN >> 16) & 0xFF),
+        (uint8_t)((SCRIPT_AUTH_TOKEN >> 8) & 0xFF),
+        (uint8_t)(SCRIPT_AUTH_TOKEN & 0xFF),
+    };
+
+    /* CRC over [TOKEN + PAYLOAD] */
+    uint16_t crc = uart_proto_crc16_update(0xFFFFu, tok_buf, UART_PROTO_TOKEN_SIZE);
+    crc = uart_proto_crc16_update(crc, payload, length);
 
     /* START byte */
     uart_poll_out(uart_dev, UART_PROTO_START_BYTE);
@@ -149,6 +185,11 @@ int uart_proto_send_frame(const struct device *uart_dev,
     /* Length big-endian */
     uart_poll_out(uart_dev, (unsigned char)((length >> 8) & 0xFF));
     uart_poll_out(uart_dev, (unsigned char)(length & 0xFF));
+
+    /* Security token 4 bytes */
+    for (size_t t = 0; t < UART_PROTO_TOKEN_SIZE; t++) {
+        uart_poll_out(uart_dev, tok_buf[t]);
+    }
 
     /* Payload */
     for (size_t i = 0; i < length; i++) {

@@ -3,14 +3,15 @@
  * @brief Framed UART protocol with CRC16 for reliable script transmission.
  *
  * Frame format:
- *   [START: 0xAA] [LEN_HIGH] [LEN_LOW] [PAYLOAD: N bytes] [CRC16_HIGH] [CRC16_LOW]
+ *   [START: 0xAA] [LEN_HIGH] [LEN_LOW] [TOKEN: 4 bytes] [PAYLOAD: N bytes] [CRC16_HIGH] [CRC16_LOW]
  *
  * - START byte   : 0xAA (1 byte)
  * - LEN          : 16-bit big-endian payload length (2 bytes)
+ * - TOKEN        : 32-bit security authorization token 0xDEADBEEF (4 bytes)
  * - PAYLOAD      : Python script source bytes (up to UART_PROTO_MAX_PAYLOAD bytes)
- * - CRC16        : CRC-16/CCITT over PAYLOAD only, big-endian (2 bytes)
+ * - CRC16        : CRC-16/CCITT over [TOKEN + PAYLOAD], big-endian (2 bytes)
  *
- * Total overhead per frame: 5 bytes (1 start + 2 len + 2 crc)
+ * Total overhead per frame: 9 bytes (1 start + 2 len + 4 token + 2 crc)
  */
 
 #ifndef UART_PROTOCOL_H
@@ -25,9 +26,13 @@
 extern "C" {
 #endif
 
+/* ── Security Authorization Token ─────────────────────────────────────────── */
+#define SCRIPT_AUTH_TOKEN           0xDEADBEEFu
+#define UART_PROTO_TOKEN_SIZE       4u
+
 /* ── Frame constants ─────────────────────────────────────────────────────── */
 #define UART_PROTO_START_BYTE       0xAAu
-#define UART_PROTO_HEADER_SIZE      3u   /* START(1) + LEN_HIGH(1) + LEN_LOW(1) */
+#define UART_PROTO_HEADER_SIZE      (3u + UART_PROTO_TOKEN_SIZE) /* START(1) + LEN(2) + TOKEN(4) */
 #define UART_PROTO_CRC_SIZE         2u
 #define UART_PROTO_OVERHEAD         (UART_PROTO_HEADER_SIZE + UART_PROTO_CRC_SIZE)
 #define UART_PROTO_MAX_PAYLOAD      6000u
@@ -44,6 +49,12 @@ extern "C" {
 #define UART_PROTO_ERR_TOO_LARGE   -3
 #define UART_PROTO_ERR_CRC         -4
 #define UART_PROTO_ERR_DEVICE      -5
+#define UART_PROTO_ERR_AUTH        -6
+
+/**
+ * @brief Update CRC-16/CCITT calculation.
+ */
+uint16_t uart_proto_crc16_update(uint16_t crc, const uint8_t *data, size_t length);
 
 /**
  * @brief Compute CRC-16/CCITT (polynomial 0x1021, init 0xFFFF) over a buffer.
