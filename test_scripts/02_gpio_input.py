@@ -6,14 +6,29 @@ Target: Nordic nRF5340 DK (Button 1 on P0.23) / Native Sim
 import time
 from machine import Pin
 
-GPIO0_PORT = "gpio@842500"
-BUTTON_PIN = 23  # P0.23 (Button 1 on nRF5340 DK, Active-Low)
+# Candidate targets: (device_name, pin_number)
+# 1. Nordic nRF5340 DK: P0.23 (Button 1 on gpio@842500, Active-Low)
+# 2. Native Sim: Pin 1 (Button 1 on gpio_emul)
+CANDIDATES = [
+    ("gpio@842500", 23),
+    ("gpio_emul", 1),
+]
 
 print("=== [TEST 2] Starting GPIO Input Verification ===")
 
 try:
-    # Initialize pin as input with internal pull-up resistor
-    btn = Pin((GPIO0_PORT, BUTTON_PIN), Pin.IN, Pin.PULL_UP)
+    btn = None
+    for port, pin in CANDIDATES:
+        try:
+            btn = Pin((port, pin), Pin.IN, Pin.PULL_UP)
+            GPIO0_PORT, BUTTON_PIN = port, pin
+            break
+        except ValueError:
+            continue
+
+    if btn is None:
+        raise ValueError("no compatible GPIO input device found")
+
     print(f"Configured {GPIO0_PORT} pin {BUTTON_PIN} as INPUT with PULL_UP")
 
     # Sample digital input level 5 times

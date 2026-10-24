@@ -1,0 +1,3 @@
+# Host PC dependencies for transmitting Python scripts to the nRF5340 DK
+# Install via: pip install -r tools/requirements.txt
+pyserial>=3.5

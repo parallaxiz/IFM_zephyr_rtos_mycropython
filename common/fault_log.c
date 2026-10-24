@@ -13,6 +13,7 @@
 #if defined(CONFIG_NVS) && defined(CONFIG_FLASH_MAP)
 #include <zephyr/fs/nvs.h>
 #include <zephyr/storage/flash_map.h>
+#include <zephyr/drivers/flash.h>
 #define NVS_AVAILABLE 1
 #else
 #define NVS_AVAILABLE 0

@@ -17,7 +17,7 @@ import ast
 import argparse
 from pathlib import Path
 
-# Strict module import whitelist allowed on embedded MicroPython firmware
+# Module import whitelist allowed on embedded MicroPython firmware (matching mp_safety.c)
 ALLOWED_MODULES = {
     "machine",
     "time",
@@ -25,6 +25,17 @@ ALLOWED_MODULES = {
     "math",
     "gc",
     "hw_hal",
+    "sys",
+    "struct",
+    "ustruct",
+    "json",
+    "ujson",
+    "re",
+    "ure",
+    "binascii",
+    "ubinascii",
+    "builtins",
+    "zephyr",
 }
 
 # Maximum allowed script size in bytes (matching firmware UART_PROTO_MAX_PAYLOAD)

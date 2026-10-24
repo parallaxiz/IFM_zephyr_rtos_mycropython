@@ -87,7 +87,7 @@ int uart_proto_receive_frame(const struct device *uart_dev,
     }
     uint16_t payload_len = ((uint16_t)len_h << 8) | (uint16_t)len_l;
 
-    if (payload_len == 0 || payload_len > UART_PROTO_MAX_PAYLOAD) {
+    if (payload_len > UART_PROTO_MAX_PAYLOAD) {
         printk("[PROTO] Error: payload length %u out of range (max %u)\n",
                (unsigned)payload_len, UART_PROTO_MAX_PAYLOAD);
         return UART_PROTO_ERR_TOO_LARGE;

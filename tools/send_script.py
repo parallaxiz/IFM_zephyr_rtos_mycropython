@@ -28,8 +28,7 @@ import time
 try:
     import serial
 except ImportError:
-    print("ERROR: pyserial not installed. Run: pip install pyserial")
-    sys.exit(1)
+    serial = None
 
 # ── Protocol constants (must match uart_protocol.h) ──────────────────────────
 PROTO_START_BYTE    = 0xAA
@@ -95,7 +94,7 @@ def send_script(port: str, script_path: str, baud: int = 115200) -> None:
 
     # ── Build frame ───────────────────────────────────────────────────────────
     frame = build_frame(payload)
-    crc   = crc16_ccitt(payload)
+    crc   = struct.unpack(">H", frame[-2:])[0]
 
     print(f"Script   : {script_path}")
     print(f"Payload  : {len(payload)} bytes")
@@ -105,37 +104,61 @@ def send_script(port: str, script_path: str, baud: int = 115200) -> None:
     print("-" * 50)
 
     # ── Open serial port ──────────────────────────────────────────────────────
+    if serial is None:
+        print("ERROR: pyserial is not installed. Please run: pip install pyserial")
+        sys.exit(1)
+
     try:
-        ser = serial.Serial(port, baudrate=baud, timeout=10)
+        ser = serial.Serial(port, baudrate=baud, timeout=0.2)
     except serial.SerialException as e:
         print(f"ERROR: Could not open serial port {port}: {e}")
         sys.exit(1)
 
-    # Allow board time to be ready after any previous reset
-    time.sleep(0.5)
+    try:
+        # Allow board time to be ready after any previous reset
+        time.sleep(0.5)
 
-    # Flush any stale data
-    ser.reset_input_buffer()
-    ser.reset_output_buffer()
+        # Flush any stale data
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
 
-    # ── Transmit frame ────────────────────────────────────────────────────────
-    print("Sending frame...")
-    ser.write(frame)
-    ser.flush()
-    print("Frame sent. Waiting for board response...\n")
+        # ── Transmit frame ────────────────────────────────────────────────────
+        print("Sending frame...")
+        ser.write(frame)
+        ser.flush()
+        print("Frame sent. Waiting for board response...\n")
 
-    # ── Read and print board output until idle ────────────────────────────────
-    idle_count = 0
-    while idle_count < 30:   # stop after ~3 seconds of silence
-        line = ser.readline()
-        if line:
-            print(line.decode('utf-8', errors='replace'), end='')
-            idle_count = 0
-        else:
-            idle_count += 1
-            time.sleep(0.1)
+        # Terminal status indicators from firmware
+        terminal_responses = [
+            "ACK:EXEC_OK",
+            "NACK:EXEC_ERR",
+            "NACK:CRC",
+            "NACK:AUTH",
+            "NACK:SIZE",
+            "NACK:SAFETY",
+            "NACK:TIMEOUT",
+            "NACK:ERR",
+            "ACK:PING",
+        ]
 
-    ser.close()
+        # ── Read and print board output until idle ────────────────────────────
+        idle_count = 0
+        while idle_count < 30:   # stop after ~3 seconds of silence
+            line = ser.readline()
+            if line:
+                text = line.decode('utf-8', errors='replace')
+                print(text, end='', flush=True)
+                idle_count = 0
+                if any(resp in text for resp in terminal_responses):
+                    break
+            else:
+                idle_count += 1
+                time.sleep(0.1)
+    except serial.SerialException as e:
+        print(f"\nSerial connection error: {e}")
+    finally:
+        ser.close()
+
     print("\nDone.")
 
 

@@ -6,15 +6,29 @@ Target: Nordic nRF5340 DK (LED1 on P0.28) / Native Sim
 import time
 from machine import Pin
 
-# Port 0 device name mapped from Zephyr devicetree
-GPIO0_PORT = "gpio@842500"
-LED_PIN = 28  # P0.28 (LED1 on nRF5340 DK)
+# Candidate targets: (device_name, pin_number)
+# 1. Nordic nRF5340 DK: P0.28 (LED1 on gpio@842500)
+# 2. Native Sim: Pin 0 (LED0 on gpio_emul)
+CANDIDATES = [
+    ("gpio@842500", 28),
+    ("gpio_emul", 0),
+]
 
 print("=== [TEST 1] Starting GPIO Output Verification ===")
 
 try:
-    # Initialize pin as output
-    led = Pin((GPIO0_PORT, LED_PIN), Pin.OUT)
+    led = None
+    for port, pin in CANDIDATES:
+        try:
+            led = Pin((port, pin), Pin.OUT)
+            GPIO0_PORT, LED_PIN = port, pin
+            break
+        except ValueError:
+            continue
+
+    if led is None:
+        raise ValueError("no compatible GPIO device found")
+
     print(f"Configured {GPIO0_PORT} pin {LED_PIN} as OUTPUT")
 
     # Cycle pin through active-low (ON) and inactive (OFF) states
